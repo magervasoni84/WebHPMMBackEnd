@@ -6,7 +6,7 @@ Pass:postgres
 
 NO funciona
 dbhpmm
-User:pgdev16750 
+User:pgdev
 Pass:postgres
 
 SI funciona 
@@ -14,9 +14,6 @@ psql -U postgres -d dbhpmm -h localhost
 dbhpmm
 User:postgres
 Pass:postgres
-
-
-
 
 
 
