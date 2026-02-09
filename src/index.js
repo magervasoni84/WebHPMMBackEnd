@@ -1,11 +1,19 @@
 import express from 'express';
+import cors from 'cors';
 import { PORT } from './config/config.js';
 import userRoutes from './routes/user.routes.js';
+import visitaRoutes from './routes/visitar.router.js';
+
 
 const app = express();
+app.use(cors());
 app.use(express.json());
-app.use(userRoutes)
+app.use(userRoutes, visitaRoutes)
 
-app.listen(PORT)
+app.listen(PORT, () => {
+  console.log(`El servidor está corriendo en http://127.0.0.1:${PORT}`)
+})
 
-console.log("el servidor esta corriendo")
+app.on('error', (err) => {
+  console.error('Error en el servidor:', err)
+})

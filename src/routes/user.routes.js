@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { pool } from '../config/configDB.js';
+import { pool } from '../config/configDBpg.js';
 
+
+//EndoPoint de prueba
 
 
 const router = Router();

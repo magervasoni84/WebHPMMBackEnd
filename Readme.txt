@@ -26,6 +26,6 @@ cambio a
 
 Instalo
 npm install express --save
-
-Instalo
 npm install pg
+npm install mssql
+npm install cors
