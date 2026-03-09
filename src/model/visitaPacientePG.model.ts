@@ -1,4 +1,4 @@
-//Modelo de datos que se guardan/obtienen Postgres 
+//Modelo de datos que se operan con la dB Postgres 
 
 import { visitaVisitantePG } from "./visitaVisitantePG.model";
 
@@ -10,6 +10,7 @@ interface visitaPacientePG {
     dni: number;
     ubicacion: string;
     observacion:string;
+    alta: string;
     acompaniante:visitaVisitantePG[]
 }
 

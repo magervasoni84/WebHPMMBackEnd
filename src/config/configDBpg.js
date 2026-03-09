@@ -1,12 +1,14 @@
+import dotenv from 'dotenv';
 import pg from 'pg';
 
+dotenv.config();
 
 const pool = new pg.Pool({
-    user: "postgres",
-    password: "postgres",
-    host: "192.168.1.11",
-    database: "webhpmm",
-    port: 5432
+    user: process.env.PG_USER,
+    password: process.env.PG_PASSWORD,
+    host: process.env.PG_HOST,
+    database: process.env.PG_DATABASE,
+    port: parseInt(process.env.PG_PORT) || 5432
 })
 
 pool.query('SELECT NOW()', (err, res) => {

@@ -1,8 +1,12 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { PORT } from './config/config.js';
 import userRoutes from './routes/user.routes.js';
 import visitaRoutes from './routes/visitar.router.js';
+
+// Cargar variables de entorno
+dotenv.config();
 
 
 const app = express();

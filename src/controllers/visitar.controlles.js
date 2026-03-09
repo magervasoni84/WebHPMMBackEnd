@@ -43,7 +43,7 @@ async function ensurePgTable() {
 export async function getVisitas(req, res) {
 	try {
 		const { recordset } = await msPool.query(pacienteQueryMS);
-
+		console.log('Datos obtenidos de MS SQL:', recordset);
 		// Formatear los datos
 		const formateado = recordset.map(r => {
 			const obj = {};
@@ -54,7 +54,7 @@ export async function getVisitas(req, res) {
 			return obj;
 		});
 
-		// Crear tabla si no existe
+		// Crear tabla si no existe Ver de meter al ejecutarse la app, no cada vez que se consulta
 		await ensurePgTable();
 
 		// Insertar/actualizar pacientes
@@ -63,18 +63,19 @@ export async function getVisitas(req, res) {
 
 		for (const rec of formateado) {
 			const insertText = `
-				INSERT INTO SegPaciente (idpaciente, hab, cama, nombre, dni, ubicacion, observacion) 
-				VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (idpaciente) 
+				INSERT INTO SegPaciente (idpaciente, hab, cama, nombre, dni, ubicacion, observacion, alta) 
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (idpaciente) 
 				DO UPDATE SET 
 					hab = EXCLUDED.hab,
 					cama = EXCLUDED.cama,
 					nombre = EXCLUDED.nombre,
 					dni = EXCLUDED.dni,
-					ubicacion = EXCLUDED.ubicacion
+					ubicacion = EXCLUDED.ubicacion,
+					alta = EXCLUDED.alta
 				RETURNING *;
 			`;
 
-			const values = [rec.idPaciente, rec.HAB, rec.CAM, rec.Nombre, rec.DNI, rec.Ubicacion, rec.Observacion];
+			const values = [rec.idPaciente, rec.HAB, rec.CAM, rec.Nombre, rec.DNI, rec.Ubicacion, rec.Observacion, rec.alta];
 			const r = await pgPool.query(insertText, values);
 
 			if (r.rows.length > 0) {
@@ -93,7 +94,7 @@ export async function getVisitas(req, res) {
 					id, idpaciente, hab, cama, nombre, 
 					dni, ubicacion, observacion
 				FROM SegPaciente 
-				WHERE idpaciente = ANY($1)
+				WHERE idpaciente = ANY($1)  AND alta = 'N'
 				ORDER BY hab, cama;
 			`;
 			const pacientesResult = await pgPool.query(pacientesQuery, [pacienteIds]);

@@ -7,6 +7,7 @@ interface visitaPacienteMS {
     nombrePaciente: string;
     dni: number;
     ubicacion: string;
+    alta: string;
 }
 
 

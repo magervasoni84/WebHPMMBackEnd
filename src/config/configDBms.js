@@ -1,15 +1,18 @@
 
+import dotenv from 'dotenv';
 import mssql from 'mssql';
+
+dotenv.config();
 
 // Configuración de la conexión
 const msPool = new mssql.ConnectionPool({
-    user: 'saWeb',
-    password: 'SaWebHPMM!2025',
-    server: '192.168.1.7',
-    database: 'HPMSA', 
+    user: process.env.MSSQL_USER,
+    password: process.env.MSSQL_PASSWORD,
+    server: process.env.MSSQL_SERVER,
+    database: process.env.MSSQL_DATABASE, 
     options: {
-        encrypt: false,
-        trustServerCertificate: true
+        encrypt: process.env.MSSQL_ENCRYPT === 'true',
+        trustServerCertificate: process.env.MSSQL_TRUST_CERT === 'true'
     }
 });
 

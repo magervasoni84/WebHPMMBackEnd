@@ -2,9 +2,9 @@
 
 const pacienteQueryMS = `
 
-DECLARE @Fecha DATE = '2026-02-01'; 
+DECLARE @Fecha DATE = CAST(GETDATE() AS DATE); 
 
-SELECT i.HAB, i.CAM, cp.PAC AS idPaciente, cp.NOM AS Nombre, cp.NDO AS DNI, isec.NOM AS Ubicacion
+SELECT i.HAB, i.CAM, cp.PAC AS idPaciente, cp.NOM AS Nombre, cp.NDO AS DNI, isec.NOM AS Ubicacion, cp.EGR as alta
 
 FROM INTEST i 
 INNER JOIN CLIPAC cp 
