@@ -1,6 +1,7 @@
-import { msPool } from '../config/configDBms.js';
-import { pacienteQueryMS } from '../query/visitaQuery.js';
+import { getMsPool } from '../config/configDBms.js';
+import { pacienteQueryMS, buscarPacienteQueryMS } from '../query/visitaQuery.js';
 import { pool as pgPool } from '../config/configDBpg.js';
+import mssql from 'mssql';
 
 
 
@@ -42,6 +43,7 @@ async function ensurePgTable() {
 
 export async function getVisitas(req, res) {
 	try {
+		const msPool = await getMsPool();
 		const { recordset } = await msPool.query(pacienteQueryMS);
 		console.log('Datos obtenidos de MS SQL:', recordset);
 		// Formatear los datos
@@ -102,7 +104,7 @@ export async function getVisitas(req, res) {
 			// Para cada paciente, obtener sus acompañantes
 			for (const paciente of pacientesResult.rows) {
 				const acompaniantesQuery = `
-					SELECT id, nombre, dni, entrada
+					SELECT id, nombre, dni, entrada, observacion
 					FROM SegAcompaniante
 					WHERE idpaciente = $1
 					ORDER BY entrada DESC
@@ -124,7 +126,7 @@ export async function getVisitas(req, res) {
 						nombre: acomp.nombre,
 						dni: acomp.dni,
 						entrada: acomp.entrada,
-						observacion: ''
+						observacion: acomp.observacion || ''
 					}))
 				};
 
@@ -191,6 +193,52 @@ export async function putVisitante(req, res) {
 		return res.json(result.rows[0]);
 	} catch (error) {
 		console.error('Error Cargar Visitante:', error);
+		return res.status(500).json({ error: 'Internal server error' });
+	}
+}
+
+
+
+export async function getBuscarXPaciente(req, res) {
+	try {
+		const { nombre, dni, ficha, diasEgreso, egreso } = req.query;
+		const diasEgresoValue = diasEgreso || egreso;
+
+		const msPool = await getMsPool();
+		const request = msPool.request();
+
+		// Add parameters
+		if (nombre) request.input('nombre', mssql.VarChar, nombre);
+		else request.input('nombre', mssql.VarChar, null);
+
+		if (dni) request.input('dni', mssql.Int, parseInt(dni));
+		else request.input('dni', mssql.Int, null);
+
+		if (ficha) request.input('ficha', mssql.Int, parseInt(ficha));
+		else request.input('ficha', mssql.Int, null);
+
+		if (diasEgresoValue) request.input('diasEgreso', mssql.Int, parseInt(diasEgresoValue));
+		else request.input('diasEgreso', mssql.Int, null);
+
+		console.log('getBuscarXPaciente SQL query:', buscarPacienteQueryMS);
+		console.log('getBuscarXPaciente params:', { nombre, dni, ficha, diasEgreso: diasEgresoValue });
+
+		const { recordset } = await request.query(buscarPacienteQueryMS);
+
+		// Format the data as expected by frontend
+		const pacientes = recordset.map(r => ({
+			idpaciente: r.idpaciente,
+			nombre: r.nombre,
+			dni: r.dni,
+			fechaIngreso: r.fechaIngreso,
+			fechaEgreso: r.fechaEgreso
+		}));
+
+		console.log('getBuscarXPaciente response:', pacientes);
+		return res.json(pacientes);
+
+	} catch (err) {
+		console.error('Error en getBuscarXPaciente controller:', err);
 		return res.status(500).json({ error: 'Internal server error' });
 	}
 }

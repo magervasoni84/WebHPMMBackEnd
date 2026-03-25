@@ -56,4 +56,24 @@ WHERE i.FEC >= @Fecha
 ORDER BY i.HAB, i.CAM;`
 
 
-export { pacienteQueryMS}
+
+const buscarPacienteQueryMS = `
+SELECT 
+    cp.PAC AS idpaciente,
+    cp.NOM AS nombre,
+    cp.NDO AS dni,
+    cp.FIN AS fechaIngreso,
+    cp.FEG AS fechaEgreso
+FROM CLIPAC cp
+WHERE ORI = 'I'
+  AND (@nombre IS NULL OR @nombre = '' OR cp.NOM LIKE '%' + @nombre + '%')
+  AND (@dni IS NULL OR @dni = '' OR cp.NDO = @dni)
+  AND (@ficha IS NULL OR @ficha = '' OR cp.PAC = @ficha)
+  AND (@diasEgreso IS NULL OR 
+       cp.FEG IS NULL OR 
+       DATEDIFF(DAY, CONVERT(DATETIME, cp.FEG), GETDATE()) <= @diasEgreso
+      )
+`;
+
+
+export { pacienteQueryMS, buscarPacienteQueryMS }

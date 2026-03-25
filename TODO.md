@@ -1,0 +1,4 @@
+- [x] Normalizar parámetros de búsqueda en getBuscarXPaciente (trim, empty->null, parse int seguro)
+- [x] Agregar validación de conflicto entre filtros (dni y ficha)
+- [x] Mejorar logging con parámetros finales tipados usados en SQL
+- [x] Verificar respuesta y actualizar TODO como completado

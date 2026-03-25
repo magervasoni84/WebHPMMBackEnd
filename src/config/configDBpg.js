@@ -1,14 +1,26 @@
 import dotenv from 'dotenv';
 import pg from 'pg';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
+
+function requireStr(name) {
+    const v = process.env[name];
+    if (typeof v !== 'string' || v.length === 0) {
+        throw new Error(`Environment variable ${name} must be a non-empty string`);
+    }
+    return v;
+}
 
 const pool = new pg.Pool({
-    user: process.env.PG_USER,
-    password: process.env.PG_PASSWORD,
-    host: process.env.PG_HOST,
-    database: process.env.PG_DATABASE,
-    port: parseInt(process.env.PG_PORT) || 5432
+    user: requireStr('PG_USER'),
+    password: requireStr('PG_PASSWORD'),
+    host: requireStr('PG_HOST'),
+    database: requireStr('PG_DATABASE'),
+    port: parseInt(process.env.PG_PORT, 10) || 5432
 })
 
 pool.query('SELECT NOW()', (err, res) => {

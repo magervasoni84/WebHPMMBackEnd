@@ -1,5 +1,5 @@
-import { pool } from './configDB.js';
-import { poolSql } from './configDBms.js';
+import { pool } from './configDBpg.js';
+import { msPool as poolSql } from './configDBms.js';
 
 console.log('--- Iniciando pruebas de conexión ---\n');
 
