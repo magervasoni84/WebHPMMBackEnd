@@ -9,7 +9,7 @@ let pgTableSegPacienteCreated = false;
 let pgTableSegAcompanianteCreated = false;
 
 
-//actualmente se ejecuta cuando hago click por primera vez, revisar si es mejor hacerlo al iniciar el servidor
+//actualmente se ejecuta cuando hago levanto el servicio, 
 async function ensurePgTable() {
 	if (pgTableSegPacienteCreated && pgTableSegAcompanianteCreated) return;
 

@@ -31,17 +31,20 @@ function getBool(baseName, defaultValue = false) {
     return raw.toLowerCase() === 'true';
 }
 
-function buildMsConfig() {
+function buildMsConfig(databaseName = null) {
     const userVar = getEnvName('MSSQL_USER');
     const passVar = getEnvName('MSSQL_PASSWORD');
     const serverVar = getEnvName('MSSQL_SERVER');
     const dbVar = getEnvName('MSSQL_DATABASE');
+    const resolvedDatabaseName = typeof databaseName === 'string' && databaseName.trim().length > 0
+        ? databaseName.trim()
+        : requireStr(dbVar);
 
     return {
         user: requireStr(userVar),
         password: requireStr(passVar),
         server: requireStr(serverVar),
-        database: requireStr(dbVar),
+        database: resolvedDatabaseName,
         options: {
             encrypt: getBool('MSSQL_ENCRYPT', false),
             trustServerCertificate: getBool('MSSQL_TRUST_CERT', true)
@@ -49,10 +52,10 @@ function buildMsConfig() {
     };
 }
 
-let msPool;
+const msPoolCache = new Map();
 
-async function createAndConnectPool() {
-    const pool = new mssql.ConnectionPool(buildMsConfig());
+async function createAndConnectPool(databaseName = null) {
+    const pool = new mssql.ConnectionPool(buildMsConfig(databaseName));
     await pool.connect();
 
     pool.query('SELECT GETDATE() as NOW', (err, res) => {
@@ -70,11 +73,14 @@ async function createAndConnectPool() {
     return pool;
 }
 
-async function getMsPool() {
-    if (!msPool || !msPool.connected) {
-        msPool = await createAndConnectPool();
+async function getMsPool(databaseName = null) {
+    const cacheKey = databaseName || 'default';
+
+    if (!msPoolCache.has(cacheKey) || !msPoolCache.get(cacheKey).connected) {
+        msPoolCache.set(cacheKey, await createAndConnectPool(databaseName));
     }
-    return msPool;
+
+    return msPoolCache.get(cacheKey);
 }
 
 // Compatibilidad temporal con imports existentes.

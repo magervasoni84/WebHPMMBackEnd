@@ -25,7 +25,7 @@ ORDER BY i.HAB, i.CAM;`
 
 
 
-
+//Consulta sacada de los programas de rastarter
 
 const pacienteQueryOLDMS = `
 

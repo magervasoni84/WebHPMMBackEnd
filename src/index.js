@@ -6,6 +6,9 @@ import { fileURLToPath } from 'url';
 import { PORT } from './config/config.js';
 import userRoutes from './routes/user.routes.js';
 import visitaRoutes from './routes/visitar.router.js';
+import authRoutes from './routes/auth.routes.js';
+import qrCirugiaRoutes from './routes/qrCirugia.routes.js';
+import entregasRoutes from './routes/entregas.routes.js';
 import { getBuscarXPaciente } from './controllers/visitar.controlles.js';
 import { getMsPool } from './config/configDBms.js';
 
@@ -25,8 +28,11 @@ app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 
-app.use('/users', userRoutes);
-app.use('/visitar', visitaRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/visitar', visitaRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/quiro', qrCirugiaRoutes);
+app.use('/api', entregasRoutes);
 
 // Iniciar servidor
 app.listen(PORT, async () => {

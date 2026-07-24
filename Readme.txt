@@ -68,7 +68,7 @@ MSSQL_TRUST_CERT=true
 ### 1) Preparar entorno
 - Instalar dependencias:
   ```bash
-  npm ci
+  npm cli
   ```
 - Definir variables de entorno de producción en el servidor/plataforma (NO commitear `.env`).
 
@@ -93,17 +93,6 @@ npm start
 
 ---
 
-## Checklist de deploy
-
-- [ ] `NODE_ENV=production`
-- [ ] `PORT` configurado correctamente
-- [ ] Secretos y credenciales cargados por variables de entorno
-- [ ] Conectividad a PostgreSQL validada
-- [ ] Conectividad a SQL Server validada
-- [ ] Build del frontend presente en `HPMMWebFront/dist` (si se sirve desde backend)
-- [ ] Backend inicia con `npm start` sin errores
-
----
 
 ## Dependencias utilizadas
 
