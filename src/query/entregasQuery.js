@@ -10,7 +10,7 @@ SELECT
     r.TXT,
     r.FUM,
     r.FCG,
-    e.NOM AS [Validado por:],
+    e.NOM as NOMVAL,
     r.PGM,
     r.ANA,
     r.ARE,
@@ -37,8 +37,13 @@ SELECT
     d.CAL,
     d.IDX,
     d.HIS,
-    e.OPE,
-    e.NOM
+	e.OPE,
+	c.NOM as NOMPAC,
+	la.DES as ANALISIS,
+    la.MET as METODO,
+	cp.NOM as PROFSOLICITANTE,
+	co.OBS as OBSERVACION,
+    lt.TXT_F as TXTINFORMATICO
 FROM 
     [hpmsa].[dbo].[LABRES] r
 INNER JOIN 
@@ -48,6 +53,25 @@ INNER JOIN
 INNER JOIN 
     [hpmsa].[dbo].[SYSOPE] e 
     ON r.OPE = e.OPE
+INNER JOIN
+	[hpmsa].[dbo].[CLIHCL] c
+	ON  r.HCL = c.HCL
+INNER JOIN
+	[hpmsa].[dbo].[LABANA] la
+	ON  r.ANA = la.ANA
+LEFT JOIN (
+    SELECT 
+        ANA,
+        TXT_F,
+        ROW_NUMBER() OVER (PARTITION BY ANA ORDER BY DET) AS rn
+    FROM [hpmsa].[dbo].[LABTXT]
+    WHERE DET IS NOT NULL  -- opcional, si solo quieres los no nulos
+) lt ON r.ANA = lt.ANA AND lt.rn = 1
+INNER JOIN (
+    [hpmsa].[dbo].[CLIORD] co
+    INNER JOIN [hpmsa].[dbo].[CLIPRF] cp
+        ON co.PRC = cp.PRF
+) ON r.PAC = co.PAC
 WHERE 
     r.PTA = @puerta
     AND r.NRO = @protocolo

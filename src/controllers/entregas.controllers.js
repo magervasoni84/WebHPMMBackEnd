@@ -11,15 +11,23 @@ function parseRequiredNumber(value) {
   return parsed;
 }
 
+const ALLOWED_PUERTAS = new Set(['LBA', 'LBG']);
+
 export async function getEntregas(req, res) {
   try {
     const source = req.method === 'GET' ? req.query : req.body;
-    const puerta = source?.puerta ? String(source.puerta).trim() : '';
+    const puerta = source?.puerta ? String(source.puerta).trim().toUpperCase() : '';
     const protocolo = parseRequiredNumber(source?.protocolo);
     const paciente = parseRequiredNumber(source?.paciente);
 
     if (!puerta) {
       return res.status(400).json({ error: "El campo 'puerta' es obligatorio (texto)." });
+    }
+
+    if (!ALLOWED_PUERTAS.has(puerta)) {
+      return res.status(400).json({
+        error: `Puerta no soportada: '${puerta}'. Puertas permitidas actualmente: LBA, LBG.`
+      });
     }
 
     if (protocolo === null) {
@@ -40,16 +48,41 @@ export async function getEntregas(req, res) {
     const { recordset } = await request.query(entregasQueryMS);
     const data = recordset.map((row) => normalizeEntregaRow(row));
 
-    const pdf = buildEntregaPdfPayload({
+    if (!data.length) {
+      return res.json({
+        estado: 'ERROR',
+        filtros: { puerta, protocolo, paciente },
+        total: 0,
+        data: []
+      });
+    }
+
+    const hasNotVerified = data.some((row) => String(row.VRF ?? '').trim().toUpperCase() !== 'S');
+
+    if (hasNotVerified) {
+      return res.json({
+        estado: 'NO VERIFICADO',
+        filtros: { puerta, protocolo, paciente },
+        total: data.length,
+        data
+      });
+    }
+
+    const pdf = await buildEntregaPdfPayload({
       filtros: { puerta, protocolo, paciente },
       resultados: data
     });
 
     return res.json({
+      estado: 'OK',
       filtros: { puerta, protocolo, paciente },
       total: data.length,
-      data,
-      pdf
+      pdf: {
+        generado: pdf.generado,
+        mensaje: pdf.mensaje,
+        fileName: pdf.fileName,
+        downloadPath: pdf.downloadPath
+      }
     });
   } catch (error) {
     console.error('Error en getEntregas controller:', error);

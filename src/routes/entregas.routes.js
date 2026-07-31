@@ -1,4 +1,4 @@
-import { Router } from 'express';
+ import { Router } from 'express';
 import { getEntregas } from '../controllers/entregas.controllers.js';
 
 const router = Router();

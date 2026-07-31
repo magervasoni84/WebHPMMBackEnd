@@ -16,6 +16,7 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const storagePath = path.resolve(__dirname, '..', 'storage');
 
 const corsOptions = {
   origin: process.env.CORS_ORIGIN || true,
@@ -27,6 +28,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(express.json());
+
+app.use('/storage', express.static(storagePath));
+app.use('/api/storage', express.static(storagePath));
 
 app.use('/api/users', userRoutes);
 app.use('/api/visitar', visitaRoutes);

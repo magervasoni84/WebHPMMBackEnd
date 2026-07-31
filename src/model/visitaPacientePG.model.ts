@@ -1,6 +1,6 @@
 //Modelo de datos que se operan con la dB Postgres 
 
-import { visitaVisitantePG } from "./visitaVisitantePG.model";
+import { visitaVisitantePG } from "./visitaVisitantePG.model.js";
 
 interface visitaPacientePG {
     idpaciente: number;   

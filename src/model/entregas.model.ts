@@ -38,6 +38,17 @@ export interface EntregaRow {
   HIS: string | null;
   OPE: string | null;
   NOM: string | null;
+  PACIENTE: string | null;
+  PACNOM: string | null;
+  NOMPAC: string | null;
+  ANALISIS: string | null;
+  VALNOM: string | null;
+  NOMVAL: string | null;
+  PRC: string | null;
+  PROFSOLICITANTE: string | null;
+  OBSERVACION: string | null;
+  METODO: string | null;
+  TXTINFORMATICO: string | null;
 }
 
 const entregasColumns: Array<keyof EntregaRow> = [
@@ -79,7 +90,18 @@ const entregasColumns: Array<keyof EntregaRow> = [
   'IDX',
   'HIS',
   'OPE',
-  'NOM'
+  'NOM',
+  'PACIENTE',
+  'PACNOM',
+  'NOMPAC',
+  'ANALISIS',
+  'VALNOM',
+  'NOMVAL',
+  'PRC',
+  'PROFSOLICITANTE',
+  'OBSERVACION',
+  'METODO',
+  'TXTINFORMATICO'
 ];
 
 function normalizeEntregaRow(row: Record<string, unknown> = {}): EntregaRow {
