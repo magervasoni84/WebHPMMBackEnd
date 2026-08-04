@@ -6,9 +6,11 @@ export interface EntregaRow {
   RES_DET: string | null;
   RES: string | null;
   VRF: string | null;
-  TXT: string | null;
+  "Texto_Resultado": string | null;
   FUM: Date | string | null;
   FCG: Date | string | null;
+  FechaOrden: Date | string | null;
+  FIMVAL: string | null;
   'Validado por:': string | null;
   PGM: string | null;
   ANA: string | null;
@@ -48,6 +50,7 @@ export interface EntregaRow {
   PROFSOLICITANTE: string | null;
   OBSERVACION: string | null;
   METODO: string | null;
+  TxtSupInformativo: string | null;
   TXTINFORMATICO: string | null;
 }
 
@@ -59,9 +62,11 @@ const entregasColumns: Array<keyof EntregaRow> = [
   'RES_DET',
   'RES',
   'VRF',
-  'TXT',
+  'Texto_Resultado',
   'FUM',
   'FCG',
+  'FechaOrden',
+  'FIMVAL',
   'Validado por:',
   'PGM',
   'ANA',
@@ -101,14 +106,43 @@ const entregasColumns: Array<keyof EntregaRow> = [
   'PROFSOLICITANTE',
   'OBSERVACION',
   'METODO',
+  'TxtSupInformativo',
   'TXTINFORMATICO'
 ];
 
 function normalizeEntregaRow(row: Record<string, unknown> = {}): EntregaRow {
   const normalizedRow: Record<string, unknown> = {};
+  const sourceRow = row ?? {};
+
+  const getValue = (aliases: string[]) => {
+    for (const alias of aliases) {
+      const value = sourceRow[alias];
+      if (value !== undefined && value !== null && value !== '') {
+        return value;
+      }
+    }
+
+    const lowerCaseRow = Object.fromEntries(
+      Object.entries(sourceRow).map(([key, value]) => [String(key).trim().toLowerCase(), value])
+    );
+
+    for (const alias of aliases) {
+      const lowerAlias = alias.toLowerCase();
+      if (lowerCaseRow[lowerAlias] !== undefined && lowerCaseRow[lowerAlias] !== null && lowerCaseRow[lowerAlias] !== '') {
+        return lowerCaseRow[lowerAlias];
+      }
+    }
+
+    return null;
+  };
 
   entregasColumns.forEach((column) => {
-    normalizedRow[column] = row[column] ?? null;
+    if (column === 'FechaOrden') {
+      normalizedRow[column] = getValue(['FechaOrden', 'fechaorden']);
+      return;
+    }
+
+    normalizedRow[column] = sourceRow[column] ?? null;
   });
 
   return normalizedRow as unknown as EntregaRow;

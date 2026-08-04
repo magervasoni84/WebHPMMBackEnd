@@ -1,6 +1,6 @@
 import mssql from 'mssql';
 import { getMsPool } from '../config/configDBms.js';
-import { entregasQueryMS } from '../query/entregasQuery.js';
+import { entregasQueryMS, entregasUpdateCliesoStaQueryMS } from '../query/entregasQuery.js';
 import { normalizeEntregaRow } from '../model/entregas.model.ts';
 import { buildEntregaPdfPayload } from '../services/entregasPdf.service.js';
 
@@ -11,7 +11,7 @@ function parseRequiredNumber(value) {
   return parsed;
 }
 
-const ALLOWED_PUERTAS = new Set(['LBA', 'LBG']);
+const ALLOWED_PUERTAS = new Set(['LBA', 'LBG', 'LBI']);
 
 export async function getEntregas(req, res) {
   try {
@@ -26,7 +26,7 @@ export async function getEntregas(req, res) {
 
     if (!ALLOWED_PUERTAS.has(puerta)) {
       return res.status(400).json({
-        error: `Puerta no soportada: '${puerta}'. Puertas permitidas actualmente: LBA, LBG.`
+        error: `Puerta no soportada: '${puerta}'. Puertas permitidas actualmente: LBA, LBG, LBI.`
       });
     }
 
@@ -71,6 +71,32 @@ export async function getEntregas(req, res) {
     const pdf = await buildEntregaPdfPayload({
       filtros: { puerta, protocolo, paciente },
       resultados: data
+    });
+
+    const uniqueItes = Array.from(
+      new Set(
+        data
+          .map((row) => Number(row?.ITE))
+          .filter((ite) => Number.isInteger(ite))
+      )
+    );
+
+    let updatedCliesoRows = 0;
+    for (const ite of uniqueItes) {
+      const updateRequest = msPool.request();
+      updateRequest.input('puerta', mssql.VarChar(20), puerta);
+      updateRequest.input('protocolo', mssql.Int, protocolo);
+      updateRequest.input('ite', mssql.Int, ite);
+
+      const updateResult = await updateRequest.query(entregasUpdateCliesoStaQueryMS);
+      updatedCliesoRows += Number(updateResult?.rowsAffected?.[0] ?? 0);
+    }
+
+    console.log('[entregas][clieso][updated]', {
+      puerta,
+      protocolo,
+      totalItes: uniqueItes.length,
+      updatedRows: updatedCliesoRows
     });
 
     return res.json({

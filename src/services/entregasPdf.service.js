@@ -3,6 +3,9 @@ import path from 'path';
 import PDFDocument from 'pdfkit';
 
 const OUTPUT_DIR = path.resolve(process.cwd(), 'storage', 'entregas-pdf');
+const SIGNATURE_SIZE = 113.4; // 4 cm en puntos
+const SIGNATURE_FOOTER_PADDING = 8;
+const RESERVED_SIGNATURE_AREA = SIGNATURE_SIZE + SIGNATURE_FOOTER_PADDING;
 
 function ensureOutputDir() {
   if (!fs.existsSync(OUTPUT_DIR)) {
@@ -26,16 +29,59 @@ function formatNumericByErr(value, err) {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
 
+  // Solo formatear cuando llega como numérico "expandido" (>= 10 chars).
+  // Si llega como texto numérico corto (< 10 chars), no tocar formato.
+  const normalizedRaw = raw.replace(',', '.');
+  const isNumericText = /^[+-]?\d*\.?\d+$/.test(normalizedRaw);
+  if (isNumericText && normalizedRaw.length < 10) return raw;
+
   const decimals = Number.parseInt(String(err ?? '').trim(), 10);
   if (Number.isNaN(decimals) || decimals < 0) return raw;
 
-  const normalized = raw.replace(',', '.');
-  if (!/^[+-]?\d*\.?\d+$/.test(normalized)) return raw;
+  if (!isNumericText) return raw;
 
-  const num = Number(normalized);
+  const num = Number(normalizedRaw);
   if (!Number.isFinite(num)) return raw;
 
   return num.toFixed(decimals).replace('.', ',');
+}
+
+function resolveFieldValue(row, aliases = []) {
+  if (!row || typeof row !== 'object') return null;
+
+  const directMatches = aliases.map((alias) => row[alias]).find((value) => value !== undefined && value !== null && value !== '');
+  if (directMatches !== undefined) return directMatches;
+
+  const lowerCaseRow = Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase(), value])
+  );
+
+  const lowerCaseMatches = aliases
+    .map((alias) => lowerCaseRow[String(alias).trim().toLowerCase()])
+    .find((value) => value !== undefined && value !== null && value !== '');
+
+  return lowerCaseMatches ?? null;
+}
+
+function formatDateTimeWithoutTimezone(value) {
+  if (!value) return '';
+
+  const pad = (num) => String(num).padStart(2, '0');
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}, ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+  }
+
+  const asString = String(value).trim();
+
+  const isoMatch = asString.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(?:Z|[+-]\d{2}:?\d{2})?$/);
+  if (isoMatch) {
+    const [, year, month, day, hours, minutes, seconds] = isoMatch;
+    return `${pad(Number(day))}/${pad(Number(month))}/${year}, ${pad(Number(hours))}:${pad(Number(minutes))}:${pad(Number(seconds))}`;
+  }
+
+  return '';
 }
 
 function prepareEntregaData({ filtros, resultados }) {
@@ -49,13 +95,47 @@ function prepareEntregaData({ filtros, resultados }) {
     ? `${puertaValue}-${protocoloValue}`
     : (puertaValue || protocoloValue);
   const solicitadoPorValue = firstRow?.PROFSOLICITANTE ?? '';
-  const fechaValueRaw = firstRow?.FEC ?? firstRow?.FCG ?? '';
-  const fechaValue = fechaValueRaw ? new Date(fechaValueRaw).toLocaleString('es-AR') : '';
+  const fechaValueRaw = resolveFieldValue(firstRow, ['FechaOrden', 'fechaorden']);
+
+  // Ajuste horario requerido:
+  // Se suma +3 horas para mostrar la hora correcta en el PDF.
+  const fechaValueForPdf = (() => {
+    const raw = fechaValueRaw;
+    if (!raw) return '';
+
+    const asString = String(raw).trim();
+    const isoMatch = asString.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(?:Z|[+-]\d{2}:?\d{2})?$/);
+
+    if (isoMatch) {
+      const [, year, month, day, hours, minutes, seconds] = isoMatch;
+      const baseDate = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hours),
+        Number(minutes),
+        Number(seconds)
+      );
+      baseDate.setHours(baseDate.getHours() + 3); // +3 para dar la hora correcta
+      return formatDateTimeWithoutTimezone(baseDate);
+    }
+
+    const parsedDate = raw instanceof Date ? raw : new Date(raw);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      parsedDate.setHours(parsedDate.getHours() + 3); // +3 para dar la hora correcta
+      return formatDateTimeWithoutTimezone(parsedDate);
+    }
+
+    return formatDateTimeWithoutTimezone(raw);
+  })();
+
+  const fechaValue = fechaValueForPdf;
   const observacionesValue = firstRow?.OBSERVACION ?? '';
 
   const rows = safeResultados.map((row) => {
     const norValue = String(row?.NOR ?? '').trim().toUpperCase();
     const referenciaEnBlanco = norValue === 'N';
+    const referenciaMenorA = norValue === 'V';
 
     return {
       ana: row.ANA,
@@ -65,11 +145,20 @@ function prepareEntregaData({ filtros, resultados }) {
       descripcion: String(row?.DESCRIPCION_EXAMEN ?? ''),
       resultado: formatNumericByErr(row?.RES, row?.ERR),
       unidades: String(row?.UNIDADES ?? ''),
-      minimo: referenciaEnBlanco ? '' : formatNumericByErr(row?.VAF_2, row?.ERR),
+      minimo: referenciaEnBlanco ? '' : (referenciaMenorA ? 'menor a' : formatNumericByErr(row?.VAF_2, row?.ERR)),
       maximo: referenciaEnBlanco ? '' : formatNumericByErr(row?.VAF_3, row?.ERR),
-      txtInformatico: row?.TXTINFORMATICO == null ? null : String(row.TXTINFORMATICO)
+      fimval: row?.FIMVAL == null ? null : String(row.FIMVAL).trim(),
+      txtSupInformativo: row?.TxtSupInformativo == null ? null : String(row.TxtSupInformativo).trim(),
+      txtInformatico: row?.TXTINFORMATICO == null ? null : String(row.TXTINFORMATICO),
+      textoResultado: row?.Texto_Resultado == null ? null : String(row.Texto_Resultado).trim()
     };
   });
+
+  const signaturePaths = Array.from(new Set(
+    rows
+      .map((row) => String(row?.fimval ?? '').trim())
+      .filter((value) => value !== '')
+  ));
 
   return {
     pacienteValue,
@@ -77,7 +166,8 @@ function prepareEntregaData({ filtros, resultados }) {
     solicitadoPorValue,
     fechaValue,
     observacionesValue,
-    rows
+    rows,
+    signaturePaths
   };
 }
 
@@ -92,6 +182,7 @@ function groupRowsByAna(rows) {
         analisis: row.analisis,
         metodo: row.metodo,
         validadoPor: row.validadoPor,
+        txtSupInformativo: row.txtSupInformativo,
         txtInformatico: row.txtInformatico,
         rows: []
       });
@@ -103,6 +194,9 @@ function groupRowsByAna(rows) {
     if (!group.analisis && row.analisis) group.analisis = row.analisis;
     if (!group.metodo && row.metodo) group.metodo = row.metodo;
     if (!group.validadoPor && row.validadoPor) group.validadoPor = row.validadoPor;
+    if ((group.txtSupInformativo == null || group.txtSupInformativo === '') && (row.txtSupInformativo != null && row.txtSupInformativo !== '')) {
+      group.txtSupInformativo = row.txtSupInformativo;
+    }
     if ((group.txtInformatico == null || group.txtInformatico === '') && (row.txtInformatico != null && row.txtInformatico !== '')) {
       group.txtInformatico = row.txtInformatico;
     }
@@ -135,7 +229,7 @@ function drawPageHeader(doc, headerData, logoPath, hojaTexto) {
   const x3 = leftX + (totalWidth / 2) + (colGap / 2) + rightHeaderShift;
   const x4 = x3 + labelRightWidth;
 
-  const headerTop = doc.page.margins.top + 118;
+  const headerTop = doc.page.margins.top + 80; //Separacion entre Logo y Header
   const rowHeight = 10;
   const rowHeights = [10, 10, 10];
 
@@ -226,24 +320,23 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
     doc.pipe(stream);
 
     const logoPath = path.resolve(process.cwd(), 'storage', 'images', 'LogoCabeceraInformesLaboratorio.jpeg');
-    const signaturePath = path.resolve(process.cwd(), 'storage', 'images', 'FirmaBioquimico.jpg');
     const headerData = prepareEntregaData({ filtros, resultados });
     const grouped = groupRowsByAna(headerData.rows);
 
-
     const pageUsableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const contentBottomY = doc.page.height - doc.page.margins.bottom - RESERVED_SIGNATURE_AREA;
     // Ajuste solicitado:
     // - Dar más ancho al nombre del resultado (columna 1) para textos largos.
     // - Reducir columnas 2..5 y desplazar ese bloque levemente a la derecha.
     const colWidths = [
-      pageUsableWidth * 0.46,
+      pageUsableWidth * 0.43,
       pageUsableWidth * 0.2,
-      pageUsableWidth * 0.11,
-      pageUsableWidth * 0.15,
+      pageUsableWidth * 0.13,
+      pageUsableWidth * 0.16,
       pageUsableWidth * 0.16
     ];
     const resultsColumnsShift = 8;
-    const colTitles = ['', 'Resultado', 'Unidades', 'Referencia', ''];
+    const colTitles = ['', 'Resultado', 'Unidad', 'Referencia', ''];
 
     let y = drawPageHeader(doc, headerData, logoPath, '1 de 1');
     y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
@@ -252,6 +345,12 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
       let estimated = 0;
       estimated += 16;
 
+      const txtSupInformativoRaw = group.txtSupInformativo == null ? '' : String(group.txtSupInformativo);
+      if (txtSupInformativoRaw.trim() !== '') {
+        const txtSupInfoHeight = doc.heightOfString(txtSupInformativoRaw, { width: colWidths[0] - 8 });
+        estimated += Math.max(10, txtSupInfoHeight) + 4;
+      }
+
       group.rows.forEach((row) => {
         const values = [row.descripcion, row.resultado, row.unidades, row.minimo, row.maximo];
         const heights = values.map((val, idx) =>
@@ -259,6 +358,15 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         );
         const dynamicRowHeight = Math.max(16, ...heights) + 4;
         estimated += dynamicRowHeight;
+
+        const textoResultadoRaw = row.textoResultado == null ? '' : String(row.textoResultado);
+        if (textoResultadoRaw.trim() !== '') {
+          const textoResultadoHeight = Math.max(
+            12,
+            doc.heightOfString(textoResultadoRaw, { width: colWidths[1] - 8 }) + 4
+          );
+          estimated += textoResultadoHeight;
+        }
       });
 
       const txtInformaticoRaw = group.txtInformatico == null ? '' : String(group.txtInformatico);
@@ -274,7 +382,7 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
     };
 
     grouped.forEach((group) => {
-      const remainingSpace = doc.page.height - doc.page.margins.bottom - y;
+      const remainingSpace = contentBottomY - y;
       const estimatedGroupHeight = getGroupEstimatedHeight(group);
 
       if (
@@ -286,7 +394,7 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
       }
 
-      if (y + 24 > doc.page.height - doc.page.margins.bottom) {
+      if (y + 24 > contentBottomY) {
         doc.addPage();
         y = drawPageHeader(doc, headerData, logoPath, '');
         y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
@@ -310,6 +418,38 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         });
       y += 10;
 
+      const txtSupInformativoRaw = group.txtSupInformativo == null ? '' : String(group.txtSupInformativo);
+      const hasTxtSupInformativo = txtSupInformativoRaw.trim() !== '';
+      const txtSupInformativoHeight = hasTxtSupInformativo
+        ? Math.max(10, doc.heightOfString(txtSupInformativoRaw, { width: colWidths[0] - 8 })) + 4
+        : 0;
+
+      if (y + txtSupInformativoHeight + 16 > contentBottomY) {
+        doc.addPage();
+        y = drawPageHeader(doc, headerData, logoPath, '');
+        y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
+
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .text(`* ${group.analisis}`, doc.page.margins.left, y, {
+            width: pageUsableWidth,
+            lineBreak: false
+          });
+        y += 14;
+      }
+
+      if (hasTxtSupInformativo) {
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .text(txtSupInformativoRaw, doc.page.margins.left + 4, y + 2, {
+            width: colWidths[0] - 8
+          });
+
+        y += txtSupInformativoHeight;
+      }
+
       group.rows.forEach((row) => {
         const values = [
           row.descripcion,
@@ -322,9 +462,15 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         const heights = values.map((val, idx) =>
           doc.heightOfString(String(val ?? ''), { width: colWidths[idx] - 8 })
         );
-        const dynamicRowHeight = Math.max(16, ...heights) + 4;
+        const dynamicRowHeight = Math.max(16, ...heights) + 2;
 
-        if (y + dynamicRowHeight + 16 > doc.page.height - doc.page.margins.bottom) {
+        const textoResultadoRaw = row.textoResultado == null ? '' : String(row.textoResultado);
+        const hasTextoResultado = textoResultadoRaw.trim() !== '';
+        const textoResultadoHeight = hasTextoResultado
+          ? Math.max(12, doc.heightOfString(textoResultadoRaw, { width: colWidths[1] - 8, lineBreak: true }) + 4)
+          : 0;
+
+        if (y + dynamicRowHeight + textoResultadoHeight + 16 > contentBottomY) {
           doc.addPage();
           y = drawPageHeader(doc, headerData, logoPath, '');
           y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
@@ -342,16 +488,32 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         let cx = doc.page.margins.left;
         values.forEach((val, idx) => {
           const shiftX = idx >= 1 ? resultsColumnsShift : 0;
+          const align = idx === 1 ? 'center' : 'left';
           doc
             .font('Helvetica')
-            .fontSize(8)
-            .text(String(val ?? ''), cx + 4 + shiftX, y + 2, {
-              width: colWidths[idx] - 8
+            .fontSize(9)  //TAMAÑO DE LETRA LINEA RESULTADOS
+            .text(String(val ?? ''), cx + 4 + shiftX, y + 1, {
+              width: colWidths[idx] - 8,
+              lineBreak: false,
+              align
             });
           cx += colWidths[idx];
         });
 
         y += dynamicRowHeight;
+
+        if (hasTextoResultado) {
+          const rowBaseY = y;
+          const rowTextOptions = { width: colWidths[1] - 8, lineBreak: true };
+
+          let resultadoX = doc.page.margins.left + colWidths[0];
+          doc
+            .font('Helvetica')
+            .fontSize(7)
+            .text(textoResultadoRaw, resultadoX + 4 + resultsColumnsShift, rowBaseY + 1, rowTextOptions);
+
+          y += textoResultadoHeight;
+        }
       });
 
       const txtInformaticoRaw = group.txtInformatico == null ? '' : String(group.txtInformatico);
@@ -362,7 +524,7 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
         : 0;
 
       const blockHeightBeforeSeparator = txtInformaticoHeight + 10; // txtInformatico (opcional) + "Validado por"
-      if (y + blockHeightBeforeSeparator + 4 > doc.page.height - doc.page.margins.bottom) {
+      if (y + blockHeightBeforeSeparator + 4 > contentBottomY) {
         doc.addPage();
         y = drawPageHeader(doc, headerData, logoPath, '');
         y = drawTableHeader(doc, y, colWidths, colTitles, resultsColumnsShift);
@@ -420,7 +582,7 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
       const x3 = doc.page.margins.left + (totalWidth2 / 2) + (colGap2 / 2) + rightHeaderShift2;
       const x4 = x3 + labelRightWidth2;
       const rowHeights2 = [10, 10, 10];
-      const yHeader2 = doc.page.margins.top + 118 + rowHeights2[0] + rowHeights2[1];
+      const yHeader2 = doc.page.margins.top + 80 + rowHeights2[0] + rowHeights2[1];
 
       doc
         .save()
@@ -440,14 +602,52 @@ async function buildEntregaPdfPayload({ filtros, resultados }) {
           align: 'left'
         });
 
-      if (fs.existsSync(signaturePath)) {
-        const signatureSize = 113.4; // 4 cm en puntos
-        const signatureX = doc.page.margins.left;
-        const signatureY = doc.page.height - doc.page.margins.bottom - signatureSize;
+      const candidateSignaturePaths = (headerData.signaturePaths || [])
+        .map((signatureValue) => path.isAbsolute(signatureValue)
+          ? signatureValue
+          : path.resolve(process.cwd(), signatureValue));
 
-        doc.image(signaturePath, signatureX, signatureY, {
-          fit: [signatureSize, signatureSize],
-          align: 'left'
+      const validSignaturePaths = candidateSignaturePaths
+        .map((resolvedPath) => {
+          const ext = path.extname(resolvedPath).toLowerCase();
+
+          if (ext === '.bmp') {
+            const jpgPath = resolvedPath.slice(0, -4) + '.jpg';
+            if (fs.existsSync(jpgPath)) {
+              return jpgPath;
+            }
+
+            const jpegPath = resolvedPath.slice(0, -4) + '.jpeg';
+            if (fs.existsSync(jpegPath)) {
+              return jpegPath;
+            }
+          }
+
+          return resolvedPath;
+        })
+        .filter((resolvedPath) => fs.existsSync(resolvedPath));
+
+      const supportedSignaturePaths = validSignaturePaths.filter((resolvedPath) => {
+        const ext = path.extname(resolvedPath).toLowerCase();
+        return ['.jpg', '.jpeg', '.png'].includes(ext);
+      });
+
+      if (supportedSignaturePaths.length > 0) {
+        const signatureGap = 20;
+        const totalWidth = (supportedSignaturePaths.length * SIGNATURE_SIZE) + ((supportedSignaturePaths.length - 1) * signatureGap);
+        const startX = doc.page.margins.left + ((pageUsableWidth2 - totalWidth) / 2);
+        const signatureY = doc.page.height - doc.page.margins.bottom - SIGNATURE_SIZE;
+
+        supportedSignaturePaths.forEach((signaturePath, index) => {
+          const signatureX = startX + (index * (SIGNATURE_SIZE + signatureGap));
+          try {
+            doc.image(signaturePath, signatureX, signatureY, {
+              fit: [SIGNATURE_SIZE, SIGNATURE_SIZE],
+              align: 'left'
+            });
+          } catch (error) {
+            // Ignorar errores de dibujo de firma para no interrumpir la generación del PDF.
+          }
         });
       }
     }
