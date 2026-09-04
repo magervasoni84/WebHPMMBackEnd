@@ -1,0 +1,38 @@
+use quiroDev
+
+SELECT
+    [ID],
+    [HCL],
+    [PAC],
+    [FEC],
+    [PQR1],
+    [OS],
+    [CIR],
+    [TIP],
+    [INS],
+    [CRC],
+    [PAT],
+    [SAN],
+    [ANE],
+    [HIN],
+    [HTE],
+    [PROG],
+    [URGE],
+    [COS],
+    [tipos],
+    [PROTO],
+    [manual],
+    [fcg],
+    [opec],
+    [fcm],
+    [opem],
+    [pqr],
+    [PQR2],
+    [AYU],
+    [monitor],
+    [cirulista],
+    [parteq],
+    [AFI],
+    [endoscopia]
+FROM [dbo].[libcir]
+where HCL = '841562'

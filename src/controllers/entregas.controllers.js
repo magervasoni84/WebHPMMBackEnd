@@ -57,7 +57,8 @@ export async function getEntregas(req, res) {
       });
     }
 
-    const hasNotVerified = data.some((row) => String(row.VRF ?? '').trim().toUpperCase() !== 'S');
+    const hasNotVerified = data.some((row) => String(row.VRF ?? '').trim().toUpperCase() !== 'S' && String(row.VRF ?? '').trim().toUpperCase() !== 'A');
+
 
     if (hasNotVerified) {
       return res.json({
